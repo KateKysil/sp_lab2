@@ -29,7 +29,6 @@ enum class TokenType {
     Operator,
     Punctuator,
     Comment,
-    Preprocessor,
     Whitespace,
     Error,
     EndOfFile
@@ -38,8 +37,6 @@ enum class TokenType {
 struct Token {
     TokenType type;
     string lexeme;
-    int line;
-    int col;
     string message; 
 };
 
@@ -55,7 +52,7 @@ static const unordered_set<string> java_keywords = {
 
 class Lexer {
 public:
-    Lexer(const string& src) : src(src), pos(0), line(1), col(1) {}
+    Lexer(const string& src) : src(src), pos(0) {}
 
     vector<Token> tokenize() {
         vector<Token> tokens;
@@ -70,7 +67,6 @@ public:
 private:
     string src;
     size_t pos;
-    int line, col;
 
     char peek(size_t k = 0) {
         if (pos + k >= src.size()) return '\0';
@@ -79,8 +75,6 @@ private:
     char get() {
         if (pos >= src.size()) return '\0';
         char c = src[pos++];
-        if (c == '\n') { ++line; col = 1; }
-        else ++col;
         return c;
     }
     bool startsWith(const string& s) {
@@ -88,45 +82,36 @@ private:
         return src.compare(pos, s.size(), s) == 0;
     }
 
-    Token makeToken(TokenType type, const string& lexeme, int tline, int tcol, const string& msg = "") {
-        return Token{ type, lexeme, tline, tcol, msg };
+    Token makeToken(TokenType type, const string& lexeme, const string& msg = "") {
+        return Token{ type, lexeme, msg};
     }
 
     Token nextToken() {
         while (true) {
             char c = peek();
             if (c == '\0') {
-                return makeToken(TokenType::EndOfFile, "", line, col);
+                return makeToken(TokenType::EndOfFile, "");
             }
             if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-                int tline = line, tcol = col;
                 string lex;
                 while (true) {
                     char p = peek();
                     if (p == ' ' || p == '\t' || p == '\r' || p == '\n') lex.push_back(get());
                     else break;
                 }
-                return makeToken(TokenType::Whitespace, lex, tline, tcol);
+                return makeToken(TokenType::Whitespace, lex);
             }
             break;
         }
 
         char c = peek();
-        int tline = line, tcol = col;
-        if (c == '#') {
-            if (col == 1) {
-                string lex;
-                while (peek() != '\n' && peek() != '\0') lex.push_back(get());
-                return makeToken(TokenType::Preprocessor, lex, tline, tcol);
-            }
-        }
         // Comments
         if (startsWith("//")) {
             string lex;
             lex.push_back(get()); // '/'
             lex.push_back(get()); // '/'
             while (peek() != '\n' && peek() != '\0') lex.push_back(get());
-            return makeToken(TokenType::Comment, lex, tline, tcol);
+            return makeToken(TokenType::Comment, lex);
         }
         if (startsWith("/*")) {
             string lex;
@@ -145,9 +130,9 @@ private:
                 }
             }
             if (!closed) {
-                return makeToken(TokenType::Error, lex, tline, tcol, "Unterminated block comment");
+                return makeToken(TokenType::Error, lex, "Unterminated block comment");
             }
-            return makeToken(TokenType::Comment, lex, tline, tcol);
+            return makeToken(TokenType::Comment, lex );
         }
         // Strings
         if (c == '"') {
@@ -167,8 +152,8 @@ private:
                 else {
                 }
             }
-            if (!closed) return makeToken(TokenType::Error, lex, tline, tcol, "Unterminated string literal");
-            return makeToken(TokenType::String, lex, tline, tcol);
+            if (!closed) return makeToken(TokenType::Error, lex, "Error");
+            return makeToken(TokenType::String, lex);
         }
 
         // Char literal
@@ -187,8 +172,8 @@ private:
                     break;
                 }
             }
-            if (!closed) return makeToken(TokenType::Error, lex, tline, tcol, "Unterminated char literal");
-            return makeToken(TokenType::Char, lex, tline, tcol);
+            if (!closed) return makeToken(TokenType::Error, lex, "Error");
+            return makeToken(TokenType::Char, lex);
         }
 
         // Number: hex, decimal, float, exponent
@@ -200,8 +185,8 @@ private:
                 lex.push_back(get()); // 'x'
                 bool anyHex = false;
                 while (isxdigit(peek())) { lex.push_back(get()); anyHex = true; }
-                if (!anyHex) return makeToken(TokenType::Error, lex, tline, tcol, "Invalid hex literal");
-                return makeToken(TokenType::Number, lex, tline, tcol);
+                if (!anyHex) return makeToken(TokenType::Error, lex, "Invalid hex literal");
+                return makeToken(TokenType::Number, lex);
             }
             // decimal/float
             while (isdigit(peek())) lex.push_back(get());
@@ -223,14 +208,14 @@ private:
                     if (peek() == '+' || peek() == '-') lex.push_back(get());
                     bool anyDig = false;
                     while (isdigit(peek())) { anyDig = true; lex.push_back(get()); }
-                    if (!anyDig) return makeToken(TokenType::Error, lex, tline, tcol, "Malformed exponent in number");
+                    if (!anyDig) return makeToken(TokenType::Error, lex, "Malformed exponent in number");
                     isFloat = true;
                 }
             }
             if (peek() == 'f' || peek() == 'F' || peek() == 'd' || peek() == 'D' || peek() == 'l' || peek() == 'L') {
                 lex.push_back(get());
             }
-            return makeToken(TokenType::Number, lex, tline, tcol);
+            return makeToken(TokenType::Number, lex);
         }
 
         // Identifier or keyword
@@ -238,8 +223,8 @@ private:
             string lex;
             lex.push_back(get());
             while (isIdentifierPart(peek())) lex.push_back(get());
-            if (java_keywords.count(lex)) return makeToken(TokenType::Keyword, lex, tline, tcol);
-            else return makeToken(TokenType::Identifier, lex, tline, tcol);
+            if (java_keywords.count(lex)) return makeToken(TokenType::Keyword, lex);
+            else return makeToken(TokenType::Identifier, lex);
         }
 
         // Operators and punctuators: attempt longest-match
@@ -252,7 +237,7 @@ private:
             if (startsWith(op)) {
                 string lex;
                 for (size_t i = 0; i < op.size(); ++i) lex.push_back(get());
-                return makeToken(TokenType::Operator, lex, tline, tcol);
+                return makeToken(TokenType::Operator, lex);
             }
         }
 
@@ -264,17 +249,17 @@ private:
         if (operators_chars.find(single) != string::npos) {
             string lex;
             lex.push_back(get());
-            return makeToken(TokenType::Operator, lex, tline, tcol);
+            return makeToken(TokenType::Operator, lex);
         }
         if (punctuators_chars.find(single) != string::npos) {
             string lex;
             lex.push_back(get());
-            return makeToken(TokenType::Punctuator, lex, tline, tcol);
+            return makeToken(TokenType::Punctuator, lex);
         }
         {
             string lex;
             lex.push_back(get());
-            return makeToken(TokenType::Error, lex, tline, tcol, "Unrecognized character");
+            return makeToken(TokenType::Error, lex/*, tline, tcol*/, "There is no such character");
         }
     }
 
@@ -295,7 +280,6 @@ string colorFor(TokenType t) {
     case TokenType::Comment: return Color::cyan;
     case TokenType::Operator: return Color::yellow;
     case TokenType::Punctuator: return Color::yellow;
-    case TokenType::Preprocessor: return Color::red + Color::bold;
     case TokenType::Error: return Color::red + Color::bold;
     case TokenType::Whitespace: return ""; 
     default: return "";
@@ -312,7 +296,6 @@ string typeName(TokenType t) {
     case TokenType::Operator: return "Operator";
     case TokenType::Punctuator: return "Punctuator";
     case TokenType::Comment: return "Comment";
-    case TokenType::Preprocessor: return "Preprocessor";
     case TokenType::Whitespace: return "Whitespace";
     case TokenType::Error: return "Error";
     case TokenType::EndOfFile: return "EOF";
@@ -346,28 +329,6 @@ int main() {
         else {
             cout << t.lexeme;
         }
-    }
-    cout << "\n\n===== TOKENS =====\n";
-    for (const Token& t : tokens) {
-        if (t.type == TokenType::EndOfFile) break;
-
-        string lex_display = t.lexeme;
-        if (t.type == TokenType::Whitespace) {
-            bool hasNewline = false;
-            for (char c : t.lexeme)
-                if (c == '\n') hasNewline = true;
-            lex_display = hasNewline ? "<whitespace-with-newline>" : "<whitespace>";
-        }
-        else {
-            if (lex_display.size() > 80) {
-                lex_display = lex_display.substr(0, 77) + "...";
-            }
-        }
-        cout << "[" << t.line << ":" << t.col << "] "
-            << setw(12) << left << typeName(t.type) << " : "
-            << lex_display;
-        if (!t.message.empty()) cout << "    <-- " << t.message;
-        cout << "\n";
     }
     return 0;
 }
