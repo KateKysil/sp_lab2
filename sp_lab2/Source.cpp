@@ -87,24 +87,22 @@ private:
     }
 
     Token nextToken() {
-        while (true) {
-            char c = peek();
-            if (c == '\0') {
-                return makeToken(TokenType::EndOfFile, "");
+         char c = peek();
+         if (c == '\0') {
+            return makeToken(TokenType::EndOfFile, "");
+         }
+         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+             string lex;
+             while (true) {
+                 char p = peek();
+                 if (p == ' ' || p == '\t' || p == '\r' || p == '\n') lex.push_back(get());
+                 else break;
+             }
+             return makeToken(TokenType::Whitespace, lex);
             }
-            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-                string lex;
-                while (true) {
-                    char p = peek();
-                    if (p == ' ' || p == '\t' || p == '\r' || p == '\n') lex.push_back(get());
-                    else break;
-                }
-                return makeToken(TokenType::Whitespace, lex);
-            }
-            break;
-        }
+            
 
-        char c = peek();
+        c = peek();
         // Comments
         if (startsWith("//")) {
             string lex;
@@ -156,7 +154,7 @@ private:
             return makeToken(TokenType::String, lex);
         }
 
-        // Char literal
+        // Char
         if (c == '\'') {
             string lex;
             lex.push_back(get());
@@ -176,21 +174,19 @@ private:
             return makeToken(TokenType::Char, lex);
         }
 
-        // Number: hex, decimal, float, exponent
+        // Number
         if (isdigit(c) || (c == '.' && isdigit(peek(1)))) {
             string lex;
             bool isFloat = false;
             if (c == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
-                lex.push_back(get()); // '0'
-                lex.push_back(get()); // 'x'
+                lex.push_back(get());
+                lex.push_back(get());
                 bool anyHex = false;
                 while (isxdigit(peek())) { lex.push_back(get()); anyHex = true; }
                 if (!anyHex) return makeToken(TokenType::Error, lex, "Invalid hex literal");
                 return makeToken(TokenType::Number, lex);
             }
-            // decimal/float
             while (isdigit(peek())) lex.push_back(get());
-            // fraction
             if (peek() == '.') {
                 if (peek(1) == '.') {
                 }
@@ -259,7 +255,7 @@ private:
         {
             string lex;
             lex.push_back(get());
-            return makeToken(TokenType::Error, lex/*, tline, tcol*/, "There is no such character");
+            return makeToken(TokenType::Error, lex, "There is no such character");
         }
     }
 

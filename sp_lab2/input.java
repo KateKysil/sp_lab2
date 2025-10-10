@@ -14,7 +14,7 @@ public class Main {
         String msg = "Hello, world!\n";
 
         // Arithmetic
-        int sum = a + 10;
+        int sum = a + .7;
         int diff = a - 5;
         int mult = a * 2;
         double div = b / 2.0;
