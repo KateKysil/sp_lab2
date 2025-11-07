@@ -5,7 +5,8 @@
 #include <vector>
 #include <unordered_set>
 #include <iomanip>
-
+#include <optional>
+//спочатку виділяємо лексему, а потім визначаємо її тип. Роздільники - клас роздільників і операториі
 using namespace std;
 namespace Color {
     const string reset = "\033[0m";
@@ -52,7 +53,7 @@ static const unordered_set<string> java_keywords = {
 
 class Lexer {
 public:
-    Lexer(const string& src) : src(src), pos(0) {}
+    Lexer(const string& src) : src(src), pos(0), pendingToken(std::nullopt) {}
 
     vector<Token> tokenize() {
         vector<Token> tokens;
@@ -67,6 +68,8 @@ public:
 private:
     string src;
     size_t pos;
+    std::optional<Token> pendingToken;
+
 
     char peek(size_t k = 0) {
         if (pos + k >= src.size()) return '\0';
@@ -87,6 +90,11 @@ private:
     }
 
     Token nextToken() {
+        if (pendingToken.has_value()) {
+            Token t = *pendingToken;
+            pendingToken.reset();
+            return t;
+        }
          char c = peek();
          if (c == '\0') {
             return makeToken(TokenType::EndOfFile, "");
@@ -179,11 +187,21 @@ private:
             string lex;
             bool isFloat = false;
             if (c == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
+                string lex;
                 lex.push_back(get());
                 lex.push_back(get());
                 bool anyHex = false;
                 while (isxdigit(peek())) { lex.push_back(get()); anyHex = true; }
                 if (!anyHex) return makeToken(TokenType::Error, lex, "Invalid hex literal");
+
+                // Check trailing invalid part
+                if (isIdentifierPart(peek())) {
+                    string invalid;
+                    while (isIdentifierPart(peek())) invalid.push_back(get());
+                    // Queue the invalid tail as a separate error token
+                    pendingToken = makeToken(TokenType::Error, invalid, "Invalid suffix after number");
+                }
+
                 return makeToken(TokenType::Number, lex);
             }
             while (isdigit(peek())) lex.push_back(get());
@@ -219,9 +237,19 @@ private:
             string lex;
             lex.push_back(get());
             while (isIdentifierPart(peek())) lex.push_back(get());
-            if (java_keywords.count(lex)) return makeToken(TokenType::Keyword, lex);
-            else return makeToken(TokenType::Identifier, lex);
+
+            // --- Added check: ensure proper delimiter ---
+            char next = peek();
+            if (isIdentifierPart(next)) {
+                return makeToken(TokenType::Error, lex + next, "Missing separator between identifiers");
+            }
+
+            if (java_keywords.count(lex))
+                return makeToken(TokenType::Keyword, lex);
+            else
+                return makeToken(TokenType::Identifier, lex);
         }
+
 
         // Operators and punctuators: attempt longest-match
         static const vector<string> multiOps = {
