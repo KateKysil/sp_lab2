@@ -187,23 +187,36 @@ private:
             string lex;
             bool isFloat = false;
             if (c == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
-                string lex;
-                lex.push_back(get());
-                lex.push_back(get());
-                bool anyHex = false;
-                while (isxdigit(peek())) { lex.push_back(get()); anyHex = true; }
-                if (!anyHex) return makeToken(TokenType::Error, lex, "Invalid hex literal");
 
-                // Check trailing invalid part
-                if (isIdentifierPart(peek())) {
-                    string invalid;
-                    while (isIdentifierPart(peek())) invalid.push_back(get());
-                    // Queue the invalid tail as a separate error token
-                    pendingToken = makeToken(TokenType::Error, invalid, "Invalid suffix after number");
+                string lex;
+                lex.push_back(get()); // 0
+                lex.push_back(get()); // x or X
+
+                bool anyHex = false;
+                bool isValid = true;
+
+                while (isIdentifierPart(peek())) {
+                    char p = get();
+                    lex.push_back(p);
+                    if (!isxdigit(p)) {
+                        isValid = false;
+                    }
+                    else {
+                        anyHex = true;
+                    }
+                }
+
+                if (!anyHex) {
+                    return makeToken(TokenType::Error, lex, "Invalid hex literal: no digits");
+                }
+
+                if (!isValid) {
+                    return makeToken(TokenType::Error, lex, "Invalid hex literal");
                 }
 
                 return makeToken(TokenType::Number, lex);
             }
+
             while (isdigit(peek())) lex.push_back(get());
             if (peek() == '.') {
                 if (peek(1) == '.') {
@@ -237,8 +250,6 @@ private:
             string lex;
             lex.push_back(get());
             while (isIdentifierPart(peek())) lex.push_back(get());
-
-            // --- Added check: ensure proper delimiter ---
             char next = peek();
             if (isIdentifierPart(next)) {
                 return makeToken(TokenType::Error, lex + next, "Missing separator between identifiers");
